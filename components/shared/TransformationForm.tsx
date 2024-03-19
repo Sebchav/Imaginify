@@ -30,6 +30,9 @@ import { AspectRatioKey, debounce, deepMergeObjects } from "@/lib/utils"
 import { updateCredits } from "@/lib/actions/user.actions"
 import MediaUploader from "./MediaUploader"
 import TransformedImage from "./TransformedImage"
+import { getCldImageUrl } from "next-cloudinary"
+import { addImage } from "@/lib/actions/image.actions"
+import { useRouter } from "next/navigation"
 
 export const formSchema = z.object({
   title: z.string(),
@@ -54,6 +57,8 @@ const TransformationForm = ({ action, data = null, userId, type, creditBalance, 
   const [transformationConfig, settransformationConfig] = useState(config)
 
   const [isPending, startTransition ] = useTransition();
+  
+  const router = useRouter();
 
   const initialValues = data && action === "Update" ? {
     title: data?.title,
@@ -68,8 +73,50 @@ const TransformationForm = ({ action, data = null, userId, type, creditBalance, 
     defaultValues: initialValues
   })
  
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    console.log(values)
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    setisSubmitting(true);
+
+    if(data || image){
+      const transformationUrl = getCldImageUrl({
+        width: image?.width,
+        height: image?.height,
+        src: image?.publicId,
+        ...transformationConfig
+      })
+
+      const imageData = {
+        title: values.title,
+        publicId: image?.publicId,
+        transformationType: type,
+        width: image?.width,
+        height: image?.height,
+        config: transformationConfig,
+        secureURL: image?.secureUrl,
+        transformationURL: transformationUrl,
+        aspectRatio: values.aspecRatio,
+        prompt: values.prompt,
+        color: values.color
+         
+      }
+
+      if(action === "Add"){
+        try{
+          const newImage = await addImage({
+            image: imageData,
+            userId,
+            path: "/"
+          })
+
+          if(newImage){
+            form.reset()
+            setImage(data)
+            router.push(`/transformations/${newImage._id}`)
+          }
+        }catch(error){
+          console.log(error)
+        }
+      }
+    }
   }
 
   const onSelectFieldHandler = (value: string, onChangeField: (value: string)=> void ) => {
